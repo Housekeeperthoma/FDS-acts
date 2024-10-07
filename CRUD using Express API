@@ -1,0 +1,73 @@
+from flask import Flask, jsonify, request
+from flask_sqlalchemy import SQLAlchemy
+from marshmallow import Schema, fields
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+db = SQLAlchemy(app)
+
+
+class User (db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    firstname = db.Column(db.String(20), nullable=False)
+    lastname = db.Column(db.String(20), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+
+class UserSchema(Schema):
+    id = fields.Int(dump_only=True)
+    firstname = fields.Str(required=True)
+    lastname = fields.Str(required=True)
+    is_admin = fields.Bool(required=True)
+
+user_schema = UserSchema()
+users_schema = UserSchema(many=True)
+
+
+@app.route('/users', methods=['GET'])
+def get_all_users():
+    users = User.query.all()
+    return users_schema.jsonify(users)
+
+
+@app.route('/users/<int:user_id>', methods=['GET'])
+def get_single_user(user_id):
+    user = User.query.get(user_id)
+    if user is None:
+        return jsonify({'message': 'User  not found'}), 404
+    return user_schema.jsonify(user)
+
+
+@app.route('/users', methods=['POST'])
+def insert_single_user():
+    data = request.get_json()
+    user = User(firstname=data['firstname'], lastname=data['lastname'], is_admin=data['is_admin'])
+    db.session.add(user)
+    db.session.commit()
+    return user_schema.jsonify(user), 201
+
+
+@app.route('/users/<int:user_id>', methods=['PUT'])
+def update_single_user(user_id):
+    user = User.query.get(user_id)
+    if user is None:
+        return jsonify({'message': 'User  not found'}), 404
+    data = request.get_json()
+    user.firstname = data.get('firstname', user.firstname)
+    user.lastname = data.get('lastname', user.lastname)
+    user.is_admin = data.get('is_admin', user.is_admin)
+    db.session.commit()
+    return user_schema.jsonify(user)
+
+
+@app.route('/users/<int:user_id>', methods=['DELETE'])
+def delete_single_user(user_id):
+    user = User.query.get(user_id)
+    if user is None:
+        return jsonify({'message': 'User  not found'}), 404
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({'message': 'User  deleted'}), 200
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
